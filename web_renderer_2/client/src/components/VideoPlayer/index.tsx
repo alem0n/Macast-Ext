@@ -1,15 +1,20 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../../store';
+import { togglePlay, seek } from '../../store/playerSlice';
 import { useVideoEvents } from '../../hooks/useVideoEvents';
 import { usePlaylistNavigation } from '../../hooks/usePlaylistNavigation';
+import { useKeyboard } from '../../hooks/useKeyboard';
+import { useTouchGestures } from '../../hooks/useTouchGestures';
 import PlayerControls from './PlayerControls';
 import StatusOverlay from '../StatusOverlay';
 import Toast from '../Toast';
 
 const CONTROLS_HIDE_DELAY = 3000;
+const SEEK_STEP = 10;
 
 const VideoPlayer: React.FC = () => {
+  const dispatch = useDispatch();
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [controlsVisible, setControlsVisible] = useState(true);
@@ -18,10 +23,17 @@ const VideoPlayer: React.FC = () => {
   const media = useSelector((s: RootState) => s.player.media);
   const status = useSelector((s: RootState) => s.player.status);
   const isFullscreen = useSelector((s: RootState) => s.player.isFullscreen);
+  const currentTime = useSelector((s: RootState) => s.player.currentTime);
+  const duration = useSelector((s: RootState) => s.player.duration);
 
-  const { goNext } = usePlaylistNavigation();
+  const { goNext, goPrev, navLoading } = usePlaylistNavigation();
   const [toastMessage, setToastMessage] = useState('');
   const [toastVisible, setToastVisible] = useState(false);
+  const [seekHint, setSeekHint] = useState<{
+    side: 'left' | 'right';
+    x: number;
+    y: number;
+  } | null>(null);
 
   const showToast = useCallback((message: string) => {
     setToastMessage(message);
@@ -40,6 +52,77 @@ const VideoPlayer: React.FC = () => {
   }, [goNext, showToast]);
 
   const { isDraggingRef } = useVideoEvents(videoRef, handleEnded);
+  useKeyboard({ videoRef, containerRef });
+
+  // ── Touch gesture callbacks ──────────────────────────────────────
+
+  const handleSingleTap = useCallback(() => {
+    const video = videoRef.current;
+    if (!video || !media) return;
+
+    if (status === 'playing') {
+      video.pause();
+    } else if (status === 'paused') {
+      video.play().catch(() => {});
+    }
+    dispatch(togglePlay());
+  }, [dispatch, status, videoRef, media]);
+
+  const handleDoubleTapLeft = useCallback((x: number, y: number) => {
+    const video = videoRef.current;
+    if (!video || !media) return;
+    const t = Math.max(0, currentTime - SEEK_STEP);
+    video.currentTime = t;
+    dispatch(seek(t));
+    setSeekHint({ side: 'left', x, y });
+    setTimeout(() => setSeekHint(null), 600);
+  }, [dispatch, currentTime, videoRef, media]);
+
+  const handleDoubleTapRight = useCallback((x: number, y: number) => {
+    const video = videoRef.current;
+    if (!video || !media) return;
+    const t = Math.min(duration || Infinity, currentTime + SEEK_STEP);
+    video.currentTime = t;
+    dispatch(seek(t));
+    setSeekHint({ side: 'right', x, y });
+    setTimeout(() => setSeekHint(null), 600);
+  }, [dispatch, currentTime, duration, videoRef, media]);
+
+  const handleSwipeLeft = useCallback(async () => {
+    if (navLoading) return;
+    const success = await goNext();
+    if (!success) {
+      showToast('已到达最后一个视频');
+    }
+  }, [goNext, navLoading, showToast]);
+
+  const handleSwipeRight = useCallback(async () => {
+    if (navLoading) return;
+    await goPrev();
+  }, [goPrev, navLoading]);
+
+  // Trigger controls visibility on any touch
+  const handleTouchStart = useCallback(() => {
+    setControlsVisible(true);
+    clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = setTimeout(() => {
+      setControlsVisible(false);
+    }, CONTROLS_HIDE_DELAY);
+  }, []);
+
+  useTouchGestures({
+    containerRef,
+    callbacks: {
+      onSingleTap: handleSingleTap,
+      onDoubleTapLeft: handleDoubleTapLeft,
+      onDoubleTapRight: handleDoubleTapRight,
+      onSwipeLeft: handleSwipeLeft,
+      onSwipeRight: handleSwipeRight,
+      onTouchStart: handleTouchStart,
+    },
+  });
+
+  // ── Mouse-based controls visibility ──────────────────────────────
 
   const showControls = useCallback(() => {
     setControlsVisible(true);
@@ -53,7 +136,7 @@ const VideoPlayer: React.FC = () => {
     return () => clearTimeout(hideTimerRef.current);
   }, []);
 
-  // Explicitly load and play when media URL changes (video remount via key)
+  // Load and play when media URL changes (video remount via key)
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !media?.url) return;
@@ -81,8 +164,6 @@ const VideoPlayer: React.FC = () => {
 
   const showControlsBar = controlsVisible && (status === 'playing' || status === 'paused');
 
-  // Key on media URL forces React to unmount/remount the video element,
-  // ensuring a clean state and proper event lifecycle on source change.
   const videoKey = media?.url || 'empty';
 
   return (
@@ -91,7 +172,6 @@ const VideoPlayer: React.FC = () => {
       ref={containerRef}
       onMouseMove={showControls}
       onMouseLeave={() => setControlsVisible(false)}
-      onTouchStart={showControls}
     >
       <video
         key={videoKey}
@@ -121,6 +201,16 @@ const VideoPlayer: React.FC = () => {
         visible={toastVisible}
         onClose={hideToast}
       />
+
+      {seekHint && (
+        <div
+          className={`seek-hint seek-hint-${seekHint.side}`}
+          style={{ left: seekHint.x, top: seekHint.y }}
+        >
+          <span className="seek-hint-icon">{seekHint.side === 'left' ? '◀' : '▶'}</span>
+          <span>{SEEK_STEP}s</span>
+        </div>
+      )}
     </div>
   );
 };

@@ -112,6 +112,16 @@ export function reorder(fromIndex: number, toIndex: number): boolean {
   return true;
 }
 
+export function removeDeadUrls(deadUrls: Set<string>): number {
+  const before = playlist.length;
+  playlist = playlist.filter((item) => !deadUrls.has(item.url));
+  const removed = before - playlist.length;
+  if (removed > 0) {
+    log(`removeDeadUrls | removed ${removed} dead URLs, playlist size now=${playlist.length}`);
+  }
+  return removed;
+}
+
 export function clearPlaylist(): void {
   log(`clearPlaylist | removing ${playlist.length} items`);
   playlist = [];

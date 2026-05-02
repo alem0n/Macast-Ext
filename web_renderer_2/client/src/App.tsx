@@ -2,7 +2,6 @@ import React from 'react';
 import { useSelector } from 'react-redux';
 import { RootState } from './store';
 import { useWebSocket } from './hooks/useWebSocket';
-import { useKeyboard } from './hooks/useKeyboard';
 import VideoPlayer from './components/VideoPlayer';
 import Playlist from './components/Playlist';
 import CastInput from './components/CastInput';
@@ -14,7 +13,6 @@ import './styles/responsive.css';
 
 const App: React.FC = () => {
   useWebSocket();
-  useKeyboard();
 
   const media = useSelector((s: RootState) => s.player.media);
 

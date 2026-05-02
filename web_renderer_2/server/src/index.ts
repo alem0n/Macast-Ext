@@ -8,6 +8,7 @@ import { requestLogger } from './middleware/logger';
 import { errorHandler } from './middleware/errorHandler';
 import apiRoutes from './routes/api';
 import { initWsServer, stopWsServer } from './websocket/WsServer';
+import { startHealthChecker, stopHealthChecker } from './services/HealthChecker';
 
 const app = express();
 
@@ -34,6 +35,7 @@ app.use(errorHandler);
 // Create HTTP server and attach WebSocket
 const httpServer = createServer(app);
 initWsServer(httpServer);
+startHealthChecker();
 
 httpServer.listen(PORT, HOST, () => {
   console.log(`Web Renderer 2 server running at http://${HOST}:${PORT}`);
@@ -43,6 +45,7 @@ httpServer.listen(PORT, HOST, () => {
 // Graceful shutdown
 function shutdown(): void {
   console.log('\nShutting down...');
+  stopHealthChecker();
   stopWsServer();
   httpServer.close(() => {
     process.exit(0);
