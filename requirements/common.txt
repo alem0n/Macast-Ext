@@ -1,0 +1,9 @@
+appdirs
+cherrypy
+lxml
+pillow
+requests
+netifaces
+git+https://github.com/xfangfang/pystray.git
+git+https://github.com/xfangfang/pyperclip.git
+pywin32
