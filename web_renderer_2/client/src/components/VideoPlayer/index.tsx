@@ -18,6 +18,10 @@ const VideoPlayer: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [controlsVisible, setControlsVisible] = useState(true);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  // Snapshot of controls visibility at touch/mouse-down time,
+  // BEFORE the handler shows them. Used to decide whether a
+  // subsequent tap/click should toggle playback or just show controls.
+  const controlsWereVisibleRef = useRef(true);
 
   const media = useSelector((s: RootState) => s.player.media);
   const status = useSelector((s: RootState) => s.player.status);
@@ -49,6 +53,13 @@ const VideoPlayer: React.FC = () => {
   // ── Touch gesture callbacks ──────────────────────────────────────
 
   const handleSingleTap = useCallback(() => {
+    // If controls were hidden when the touch started, tapping should
+    // only reveal them — not toggle playback. onTouchStart already
+    // made them visible; we just don't toggle.
+    if (!controlsWereVisibleRef.current) {
+      return;
+    }
+
     const video = videoRef.current;
     if (!video || !media) return;
 
@@ -73,14 +84,17 @@ const VideoPlayer: React.FC = () => {
     await goPrev();
   }, [goPrev, navLoading]);
 
-  // Trigger controls visibility on any touch
+  // Snapshots controls visibility and shows them on every touch.
+  // The snapshot is consumed by handleSingleTap to decide whether
+  // to toggle playback or only reveal controls.
   const handleTouchStart = useCallback(() => {
+    controlsWereVisibleRef.current = controlsVisible;
     setControlsVisible(true);
     clearTimeout(hideTimerRef.current);
     hideTimerRef.current = setTimeout(() => {
       setControlsVisible(false);
     }, CONTROLS_HIDE_DELAY);
-  }, []);
+  }, [controlsVisible]);
 
   useTouchGestures({
     containerRef,
@@ -101,6 +115,30 @@ const VideoPlayer: React.FC = () => {
       setControlsVisible(false);
     }, CONTROLS_HIDE_DELAY);
   }, []);
+
+  // Snapshot visibility on mousedown, so a click without prior mouse
+  // movement knows whether controls were already visible or not.
+  const handleMouseDown = useCallback(() => {
+    controlsWereVisibleRef.current = controlsVisible;
+    showControls();
+  }, [controlsVisible, showControls]);
+
+  const handleContainerClick = useCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('.player-controls')) return;
+
+    if (!controlsWereVisibleRef.current) return;
+
+    const video = videoRef.current;
+    if (!video || !media) return;
+
+    if (status === 'playing') {
+      video.pause();
+    } else if (status === 'paused') {
+      video.play().catch(() => {});
+    }
+    dispatch(togglePlay());
+  }, [dispatch, status, videoRef, media]);
 
   useEffect(() => {
     return () => clearTimeout(hideTimerRef.current);
@@ -142,6 +180,8 @@ const VideoPlayer: React.FC = () => {
       ref={containerRef}
       onMouseMove={showControls}
       onMouseLeave={() => setControlsVisible(false)}
+      onMouseDown={handleMouseDown}
+      onClick={handleContainerClick}
     >
       <video
         key={videoKey}
