@@ -4,7 +4,7 @@ cherrypy
 lxml
 pillow
 requests
-netifaces
+ifaddr
 git+https://github.com/xfangfang/pystray.git
 git+https://github.com/xfangfang/pyperclip.git
 pywin32

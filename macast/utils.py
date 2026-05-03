@@ -13,7 +13,7 @@ import locale
 import cherrypy
 import subprocess
 from enum import Enum
-import netifaces as ni
+import ifaddr
 
 if sys.platform == 'darwin':
     from AppKit import NSBundle
@@ -143,27 +143,22 @@ class Setting:
     @staticmethod
     def get_ip():
         last_ip = []
-        gateways = ni.gateways()  # {type: [{ip, interface, default},{},...], type: []}
-        interfaces = set(Setting.get(SettingProperty.Additional_Interfaces, []))
-        interface_type = [ni.AF_INET, ni.AF_LINK]
-        for t in interface_type:
-            if t in gateways:
-                for i in gateways[t]:
-                    if len(i) > 1:
-                        interfaces.add(i[1])
-        for i in Setting.get(SettingProperty.Blocked_Interfaces, []):
-            if i in interfaces:
-                interfaces.remove(i)
-        logger.debug(interfaces)
-        for i in interfaces:
-            try:
-                iface = ni.ifaddresses(i)
-            except ValueError as e:
+        adapters = ifaddr.get_adapters()
+        blocked = Setting.get(SettingProperty.Blocked_Interfaces, [])
+
+        for adapter in adapters:
+            name = adapter.nice_name or adapter.name
+            if name in blocked or adapter.name in blocked:
                 continue
-            if ni.AF_INET in iface:
-                for j in iface[ni.AF_INET]:
-                    if 'addr' in j and 'netmask' in j:
-                        last_ip.append((j['addr'], j['netmask']))
+            for ip_info in adapter.ips:
+                if ip_info.is_IPv4:
+                    mask = ip_info.network_prefix
+                    netmask = '.'.join(
+                        str((0xFFFFFFFF << (32 - mask) >> (8 * i)) & 0xFF)
+                        for i in range(3, -1, -1)
+                    )
+                    last_ip.append((ip_info.ip, netmask))
+
         Setting.last_ip = set(last_ip)
         logger.debug(Setting.last_ip)
         return Setting.last_ip

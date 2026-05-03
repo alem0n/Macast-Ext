@@ -2,6 +2,7 @@
 
 import os
 import sys
+import shutil
 import gettext
 import logging
 from macast import Setting, SETTING_DIR
@@ -73,9 +74,47 @@ def clear_env():
         pass
 
 
+def extract_bundled_web_renderer():
+    """Extract bundled Web Renderer 2 files from PyInstaller MEIPASS to SETTING_DIR.
+
+    Only runs when frozen (PyInstaller exe) and the bundled app exists.
+    Safe to call on every startup — skips if files are already deployed.
+    """
+    if not getattr(sys, 'frozen', False):
+        return
+
+    meipass = getattr(sys, '_MEIPASS', None)
+    if not meipass:
+        return
+
+    bundled_app = os.path.join(meipass, 'web_renderer_2_app')
+    if not os.path.isdir(bundled_app):
+        return
+
+    renderer_dir = os.path.join(SETTING_DIR, 'renderer')
+    plugin_dest = os.path.join(renderer_dir, 'web_renderer_2.py')
+    app_dest = os.path.join(SETTING_DIR, 'web_renderer_2_app')
+
+    # Extract plugin file
+    bundled_plugin = os.path.join(bundled_app, 'plugin.py')
+    if os.path.isfile(bundled_plugin) and not os.path.isfile(plugin_dest):
+        os.makedirs(renderer_dir, exist_ok=True)
+        shutil.copy2(bundled_plugin, plugin_dest)
+        logger.info("Extracted plugin to %s", plugin_dest)
+
+    # Extract app (server_py + client/dist)
+    server_init = os.path.join(app_dest, 'server_py', '__init__.py')
+    if not os.path.isfile(server_init):
+        if os.path.isdir(app_dest):
+            shutil.rmtree(app_dest, ignore_errors=True)
+        shutil.copytree(bundled_app, app_dest, ignore=shutil.ignore_patterns('plugin.py'))
+        logger.info("Extracted app to %s", app_dest)
+
+
 if __name__ == '__main__':
     clear_env()
     setup_logging()
     get_lang()
     set_mpv_default_path()
+    extract_bundled_web_renderer()
     gui(lang=_)

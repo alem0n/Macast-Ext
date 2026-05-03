@@ -155,7 +155,7 @@ Write-Step "Upgrading pip..."
 # ── dependencies ─────────────────────────────────────────────────────
 
 Write-Step "Installing runtime dependencies..."
-& $Pip install requests appdirs cherrypy lxml netifaces pillow pyperclip pystray pywin32 --quiet
+& $Pip install requests appdirs cherrypy lxml ifaddr pillow pyperclip pystray pywin32 --quiet
 
 if ($WithWebRenderer) {
     Write-Step "Installing Web Renderer 2 dependency (aiohttp)..."
@@ -213,6 +213,10 @@ if ($WithWebRenderer) {
 
     Copy-Item -Recurse "$ServerPyDir\*" "$StagingDir\server_py\"
     Copy-Item -Recurse "$WebRendererClientDir\dist\*" "$StagingDir\client\dist\"
+
+    # Bundle the plugin file so it can be auto-extracted on first run
+    $PluginSrc = Join-Path $WebRendererDir "macast_renderer.py"
+    Copy-Item $PluginSrc "$StagingDir\plugin.py"
 
     Write-Host "  Staging: $StagingDir" -ForegroundColor Green
 }

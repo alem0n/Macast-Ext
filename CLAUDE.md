@@ -34,7 +34,7 @@ source .venv/bin/activate
 .venv/Scripts/pip install --upgrade pip
 
 # Install runtime dependencies (Windows)
-pip install requests appdirs cherrypy lxml netifaces pillow pyperclip pystray pywin32
+pip install requests appdirs cherrypy lxml ifaddr pillow pyperclip pystray pywin32
 
 # Install Macast itself in editable mode
 pip install -e .
@@ -281,7 +281,7 @@ UDP multicast on `239.255.255.250:1900`.
 - NOTIFY interval: every 3 seconds (via CherryPy Monitor)
 - IP change detection: every 30 seconds; re-registers all devices on change
 - M-SEARCH response: unicast UDP back to requester with device location URL
-- Multicast membership managed per-interface via `netifaces`
+- Multicast membership managed per-interface via `ifaddr`
 
 ## Settings System
 
